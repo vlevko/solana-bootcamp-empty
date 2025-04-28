@@ -6,7 +6,26 @@ import escrowIdl from "./escrow.json";
 import { Escrow } from "./idlType";
 import { config } from "./config";
 import { randomBytes } from "crypto";
-import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID as TOKEN_PROGRAM } from "@solana/spl-token";
+import {
+  Mint,
+  getMint,
+  getAssociatedTokenAddressSync,
+  TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID
+} from "@solana/spl-token";
+
+const isToken2022 = async(
+  connection: web3.Connection,
+  tokenMint: PublicKey,
+): Promise<boolean> => {
+  try {
+    const mintInfo: Mint = await getMint(connection, tokenMint);
+    return Boolean(mintInfo.mintAuthority?.equals(TOKEN_2022_PROGRAM_ID));
+  } catch (e) {
+    console.error(e);
+    return false;
+  }
+};
 
 export class EscrowProgram {
   protected program: Program<Escrow>;
@@ -41,6 +60,18 @@ export class EscrowProgram {
   ) {
     const offerId = new BN(randomBytes(8));
     const offerAddress = this.createOfferId(offerId);
+
+    const isTokenA2022 = await isToken2022(this.connection, tokenMintA);
+    const isTokenB2022 = await isToken2022(this.connection, tokenMintB);
+
+    // Enforce same standard requirement
+    if (isTokenA2022 !== isTokenB2022) {
+      throw new Error(
+        "Both tokens in an offer must be of the same standard (either both Token 2022 or both standard SPL)"
+      );
+    }
+
+    const TOKEN_PROGRAM = isTokenA2022 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID;
 
     const vault = getAssociatedTokenAddressSync(
       tokenMintA,
@@ -102,6 +133,9 @@ export class EscrowProgram {
     tokenMintA: PublicKey,
     tokenMintB: PublicKey
   ) {
+    const isTokenA2022 = await isToken2022(this.connection, tokenMintA);
+    const TOKEN_PROGRAM = isTokenA2022 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID;
+
     const takerTokenAccountA = getAssociatedTokenAddressSync(
       tokenMintA,
       this.wallet.publicKey,
