@@ -93,7 +93,7 @@ export function CreateOfferDialog({
     } catch (error) {
       toast("Error creating Offer");
     } finally {
-      queryClient.invalidateQueries({ queryKey: ["offers"] });
+      await queryClient.invalidateQueries({ queryKey: ["offers"] });
       setIsSubmitting(false);
     }
   };
